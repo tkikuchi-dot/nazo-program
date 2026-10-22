@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>なぞロボ - プログラミングなぞときゲーム</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- タイトル画面 -->
+  <section class="screen title-screen" id="titleScreen">
+    <div class="title-box">
+      <h1 class="title-logo" aria-label="なぞロボ">
+        <span class="title-tile">な</span><span class="title-tile">ぞ</span><span class="title-tile">ロ</span><span class="title-tile">ボ</span>
+      </h1>
+      <div class="title-track" aria-hidden="true">
+        <div class="title-robot" id="titleRobot"></div>
+      </div>
+      <p class="title-sub">ロボットをプログラミングして、なぞを解こう！</p>
+      <button class="btn btn-play btn-start" id="btnGameStart">GAME START</button>
+      <label class="volume">音量<input type="range" min="0" max="100" value="70" data-volume aria-label="音量"></label>
+    </div>
+  </section>
+
+  <!-- ステージ選択画面 -->
+  <section class="screen select-screen hidden" id="selectScreen">
+    <header class="app-header">
+      <button class="btn btn-small btn-header" id="btnToTitle">← タイトル</button>
+      <div class="logo">なぞロボ</div>
+      <label class="volume">音量<input type="range" min="0" max="100" value="70" data-volume aria-label="音量"></label>
+    </header>
+    <div class="select-body">
+      <h2 class="select-title">ステージ選択</h2>
+      <div class="stage-groups" id="stageGrid"></div>
+    </div>
+  </section>
+
+  <!-- ゲーム画面 -->
+  <section class="screen game-screen hidden" id="gameScreen">
+    <button id="btnSecret" type="button" tabindex="-1" aria-hidden="true"></button>
+    <header class="app-header">
+      <button class="btn btn-small btn-header" id="btnToSelect">← ステージ選択</button>
+      <div class="logo">なぞロボ</div>
+      <div class="stage-title" id="stageTitle"></div>
+      <div class="clear-mark hidden" id="clearMark">CLEAR済み</div>
+      <button class="btn btn-small btn-header" id="btnCompact" type="button" title="命令の説明や、プログラムの補足を隠します">説明を非表示</button>
+    </header>
+
+    <main class="layout" id="gameLayout">
+      <section class="stage-area">
+        <div class="card tutorial hidden" id="tutorial"></div>
+
+        <details class="card guide" id="guideBox" open>
+          <summary>あそびかた</summary>
+          <div id="guide"></div>
+        </details>
+
+        <div class="mission hidden" id="mission"></div>
+
+        <div class="card board-stage" id="mainBoard"></div>
+
+        <div class="controls">
+          <button class="btn btn-play" id="btnPlay"></button>
+          <button class="btn" id="btnStep"><span class="icon">▶|</span> 1ステップ</button>
+          <button class="btn" id="btnReset"><span class="icon">↺</span> リセット</button>
+          <div class="speed">
+            <span>速さ</span>
+            <button class="btn btn-small" data-speed="slow">ゆっくり</button>
+            <button class="btn btn-small" data-speed="normal">ふつう</button>
+            <button class="btn btn-small" data-speed="fast">はやい</button>
+            <button class="btn btn-small" data-speed="faster">もっとはやい</button>
+          </div>
+          <label class="volume">音量<input type="range" min="0" max="100" value="70" data-volume aria-label="音量"></label>
+        </div>
+
+        <div class="message" id="message"></div>
+        <div class="stats" id="stats"></div>
+      </section>
+
+      <aside class="card palette-panel">
+        <h2>命令</h2>
+        <p class="panel-note">ドラッグでプログラムへ。クリックでも最後に追加できます。</p>
+        <div class="palette-list" id="palette"></div>
+
+        <div id="subSection">
+          <div class="palette-section-head">
+            <h3>サブ命令 <span class="sub-count" id="subCount"></span></h3>
+            <div class="sub-actions">
+              <button class="btn btn-small btn-new-sub" id="btnCopyMain" type="button" title="今のメインプログラムを、新しいサブ命令にコピーします">メインをコピー</button>
+              <button class="btn btn-small btn-new-sub" id="btnNewSub" type="button">＋ 作る</button>
+            </div>
+          </div>
+          <div class="palette-list" id="subPalette"></div>
+        </div>
+
+        <h3 class="palette-section-title">これから登場</h3>
+        <div class="locked-list" id="lockedPalette"></div>
+      </aside>
+
+      <aside class="card program-panel" id="programPanel">
+        <div class="program-head">
+          <h2>プログラム</h2>
+          <div class="program-actions">
+            <button class="btn btn-small" id="btnSplit" type="button" title="メインとサブ命令を、左右に並べて表示します">二画面</button>
+            <button class="btn btn-small" id="btnMulti" type="button" title="オンにすると、クリックで追加、ドラッグで範囲を選べます">複数選択</button>
+            <button class="btn btn-small" id="btnCopyInst" type="button" title="選んだ命令をコピーします。IF と「ここまで」は、片方だけ選んでも両方コピーします">コピー</button>
+            <button class="btn btn-small" id="btnPasteInst" type="button" title="いま開いているプログラムの末尾に貼ります。サブ命令を開いてから貼ると、そこに入ります">貼り付け</button>
+            <button class="btn btn-small" id="btnClear" type="button">ぜんぶ消す</button>
+          </div>
+        </div>
+        <div class="program-views" id="programViews">
+          <section class="program-view" id="viewMain">
+            <button class="pane-switch" id="paneMainBtn" type="button">メイン</button>
+            <div class="pane-slot" id="slotMain">
+              <div class="program-stack" id="liveStack">
+                <div class="routine-tabs" id="routineTabs"></div>
+                <div class="routine-bar" id="routineBar"></div>
+                <ol class="program-list" id="program"></ol>
+              </div>
+            </div>
+          </section>
+          <section class="program-view hidden" id="viewSub">
+            <div class="pane-switch-row">
+              <button class="pane-switch" id="paneSubBtn" type="button">サブ命令</button>
+              <select class="split-sub-pick" id="splitSubPick" title="右に出すサブ命令"></select>
+            </div>
+            <div class="pane-slot" id="slotSub">
+              <div class="program-stack hidden" id="mirrorStack">
+                <div class="mirror-bar" id="mirrorBar"></div>
+                <ol class="program-list is-mirror" id="mirrorList"></ol>
+              </div>
+            </div>
+          </section>
+        </div>
+        <p class="panel-note" id="programNote">並べ替えはドラッグ。外へドラッグすると消せます。</p>
+      </aside>
+    </main>
+  </section>
+
+  <div class="overlay hidden" id="overlay">
+    <div class="overlay-inner">
+      <h2 class="overlay-title">同じプログラムで 9体のロボットが挑戦！</h2>
+      <div class="multi-grid" id="multiGrid"></div>
+      <div class="overlay-result" id="overlayResult"></div>
+      <div class="overlay-actions hidden" id="overlayActions">
+        <button class="btn" id="btnBack">もどって直す</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="clear-banner hidden" id="clearBanner">
+    <div class="confetti" id="confetti"></div>
+    <div class="clear-text" id="clearText">CLEAR!</div>
+    <div class="clear-sub" id="clearSub"></div>
+    <div class="clear-stats" id="clearStats"></div>
+    <div class="clear-actions">
+      <label class="volume">音量<input type="range" min="0" max="100" value="70" data-volume aria-label="音量"></label>
+      <button class="btn" id="btnClearClose">閉じる</button>
+      <button class="btn" id="btnClearSelect">ステージ選択へ</button>
+      <button class="btn btn-play" id="btnClearNext">次のステージへ</button>
+    </div>
+  </div>
+
+  <script src="js/stages.js"></script>
+  <script src="js/main-stages.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/solutions.js"></script>
+  <script src="js/board-view.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/tutorial.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
