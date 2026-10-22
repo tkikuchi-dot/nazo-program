@@ -442,7 +442,7 @@ const TUTORIAL_05 = [
 ];
 
 // saveKey: 保存データのキー（ステージ番号を変えても以前の進みぐあいを引き継ぐため）
-// requires: このステージを遊ぶ前にクリアが必要なステージ
+// requires: おすすめの順番。選ぶときは、最初から全部遊べる
 // allowSubs: サブ命令を使えるか
 // allowElse: IF に ELSE IF / ELSE を足すボタンを出すか（後のステージで解放する）
 const STAGES = [

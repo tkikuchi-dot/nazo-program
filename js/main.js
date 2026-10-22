@@ -104,8 +104,8 @@
     showScreen('select');
   }
 
-  function isUnlocked(s) {
-    return !s.requires || isCleared(stageById(s.requires));
+  function isUnlocked() {
+    return true;
   }
 
   function renderStageSelect() {
