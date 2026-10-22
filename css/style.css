@@ -247,8 +247,22 @@ button.stage-card:active { transform: translateY(2px); box-shadow: 0 2px 0 var(-
 h2 { margin: 0 0 6px; font-size: 17px; }
 .panel-note { margin: 6px 0; font-size: 12px; opacity: .7; }
 
-/* ---------- あそびかた ---------- */
-.guide summary { cursor: pointer; font-weight: 800; }
+/* ---------- あそびかた / 謎解きの答え ---------- */
+.guide summary {
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+.guide summary::-webkit-details-marker { display: none; }
+.guide summary::marker { content: ""; }
+.guide summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 12px;
+  transition: transform .15s;
+}
+.guide[open] summary::before { transform: rotate(90deg); }
 .guide-list { margin: 8px 0 0; padding-left: 1.4em; line-height: 1.9; font-size: 14px; }
 .chip {
   display: inline-block;

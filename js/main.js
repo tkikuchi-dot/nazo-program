@@ -161,6 +161,9 @@
     clearTimeMs = 0;
     $('stageTitle').textContent = `${s.label}　${s.title}`;
     $('guide').innerHTML = s.guide;
+    const answerGuide = s.group === '本編';
+    $('guideSummary').textContent = answerGuide ? '謎解きの答え' : 'あそびかた';
+    $('guideBox').open = !answerGuide && !s.tutorial;
     $('clearMark').textContent = s.finale ? '合格済み' : 'CLEAR済み';
     $('clearMark').classList.toggle('hidden', !isCleared(s));
     showScreen('game');
@@ -216,7 +219,6 @@
     }) : null;
     syncTutorialWorld();
     applyCompact();
-    $('guideBox').open = !s.tutorial;
     programUnits = programSize(editor.program);
 
     resetRun();

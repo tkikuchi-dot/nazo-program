@@ -78,16 +78,32 @@ function condJoinAt(inst, index) {
 // 当てはまらなかったとき、記憶の中身と入力を短く見せる
 function condNote(inst, mem) {
   return inst.conds.map((c, i) => {
-    const text = `${c.slot}は${shownValue(mem[c.slot])}、入力は${shownValue(c.ch)}`;
+    const target = condCompareTo(c);
+    const right = target.slot
+      ? `${target.slot}は${shownValue(mem[target.slot])}`
+      : `入力は${shownValue(target.value)}`;
+    const text = `${c.slot}は${shownValue(mem[c.slot])}、${right}`;
     if (i === 0) return text;
     return `${condJoinAt(inst, i) === 'or' ? ' または ' : ' かつ '}${text}`;
   }).join('');
 }
 
-// IF / ELSE IF の条件。選んだ記憶と、入力した値を比べる。上から順に、かつ／またはでつなぐ
+// 条件の右側。from が A〜c ならその記憶。なければ入力値（古いデータは ch）
+function condCompareTo(c) {
+  if (c && SLOTS.includes(c.from)) return { slot: c.from };
+  if (c && Object.prototype.hasOwnProperty.call(c, 'from')) return { value: c.from ?? null };
+  return { value: c ? (c.ch ?? null) : null };
+}
+
+function condRightValue(mem, c) {
+  const target = condCompareTo(c);
+  return target.slot ? mem[target.slot] : target.value;
+}
+
+// IF / ELSE IF の条件。選んだ記憶と、もう一つの記憶か入力を比べる。上から順に、かつ／またはでつなぐ
 function evalConds(inst, mem) {
   const results = inst.conds.map((c) => {
-    const same = canonValue(mem[c.slot]) === canonValue(c.ch);
+    const same = canonValue(mem[c.slot]) === canonValue(condRightValue(mem, c));
     return c.cmp === 'ne' ? !same : same;
   });
   return results.reduce((acc, ok, i) => {

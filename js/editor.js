@@ -10,7 +10,7 @@ const OP_INFO = {
   ELSEIF: { cls: 'elseif' },
   ELSE: { cls: 'else' },
   ENDIF: { cls: 'endif' },
-  IF: { desc: '選んだ記憶が、入力と同じか調べる\nひらがなも数字も可。２と2は同じ\n空欄は「何も入っていない」\nかつ／またはは、条件のあいだで別々\n上から順に組み合わせる\n当てはまれば「ここまで」を実行', cls: 'if' },
+  IF: { desc: '選んだ記憶が、A〜c か入力と同じか調べる\n右で A〜c を選ぶと、その記憶と比べる\nX を選ぶと文字を入力できる\nひらがなも数字も可。２と2は同じ\n空欄は「何も入っていない」\nかつ／またはは、条件のあいだで別々\n上から順に組み合わせる\n当てはまれば「ここまで」を実行', cls: 'if' },
   ABORT: { desc: 'あきらめてしまう（消せない）', cls: 'abort' },
   '+': { desc: 'A に X を足す\nX は A〜c か、N の数字\nスキャンした数字も X にできる。２と2は同じ\nA がひらがななら、その数だけ五十音で進む\n「ん」の次は「あ」。空の A は 0 から', cls: 'plus' },
   '-': { desc: 'A から X を引く\nX は A〜c か、N の数字\nスキャンした数字も X にできる。２と2は同じ\nA がひらがななら、その数だけ五十音で戻る\n「あ」の前は「ん」。空の A は 0 から', cls: 'minus' },
@@ -74,10 +74,17 @@ function upgradeArith(inst) {
   return { ...inst, op, slot, by };
 }
 
+function condTargetOk(c) {
+  const target = condCompareTo(c);
+  if (target.slot) return true;
+  const v = target.value;
+  return v == null || typeof v === 'string' || (typeof v === 'number' && Number.isInteger(v));
+}
+
 function validConds(inst) {
   return Array.isArray(inst.conds) && inst.conds.length >= 1 && inst.conds.length <= MAX_CONDS &&
     inst.conds.every((c, i) => c && SLOTS.includes(c.slot) && (c.cmp === 'eq' || c.cmp === 'ne') &&
-      (c.ch === null || typeof c.ch === 'string') &&
+      condTargetOk(c) &&
       (i === 0 || c.join === 'and' || c.join === 'or'));
 }
 
@@ -87,7 +94,14 @@ function withCondSlots(inst) {
     ...inst,
     join: fallback,
     conds: inst.conds.map((c, i) => {
-      const next = { ...c, ch: c.ch ?? null, slot: SLOTS.includes(c.slot) ? c.slot : 'A' };
+      const target = condCompareTo(c);
+      const literal = target.slot ? null : (target.value ?? null);
+      const next = {
+        ...c,
+        slot: SLOTS.includes(c.slot) ? c.slot : 'A',
+        from: target.slot || literal,
+        ch: literal,
+      };
       if (i === 0) delete next.join;
       else next.join = c.join === 'or' || c.join === 'and' ? c.join : fallback;
       return next;
@@ -104,18 +118,6 @@ function upgradeIf(inst) {
   }
   if (!Array.isArray(inst.conds)) return inst;
   return withCondSlots(inst);
-}
-
-// IF に入力された文字を1文字にそろえる（カタカナはひらがな、全角数字は半角に直す）。
-// 続けて打ったときは、最後の1文字を使う。空なら null
-function normalizeChar(value) {
-  const chars = Array.from(String(value ?? '').replace(/[\u200b\u200c\u200d\ufeff]/g, '').trim());
-  const ch = chars[chars.length - 1];
-  if (!ch) return null;
-  const digit = digitValue(ch);
-  if (digit != null) return String(digit);
-  const code = ch.codePointAt(0);
-  return code >= 0x30a1 && code <= 0x30f6 ? String.fromCodePoint(code - 0x60) : ch;
 }
 
 class ProgramEditor {
@@ -804,10 +806,33 @@ class ProgramEditor {
   renameSub(id, name) {
     const sub = this.subById(id);
     if (!sub) return;
-    sub.name = name.slice(0, SUB_NAME_MAX);
+    const next = String(name ?? '').slice(0, SUB_NAME_MAX);
+    if (sub.name === next) return;
+    sub.name = next;
     this.save();
-    this.renderPalette();
-    this.refreshViews();
+    // 入力欄を作り直すと、文字の途中でフォーカスが外れて入力が止まる
+    this.patchSubName(sub);
+  }
+
+  patchSubName(sub) {
+    const shown = sub.name || '（名前なし）';
+    if (this.current === sub.id) {
+      this.tabsEl.querySelectorAll('.routine-tab').forEach((b) => {
+        if (b.textContent.startsWith('サブ命令')) b.textContent = `サブ命令: ${shown}`;
+      });
+    }
+    [this.subPaletteEl, this.listEl, this.mirrorList].forEach((root) => {
+      if (!root) return;
+      root.querySelectorAll(`[data-sub="${CSS.escape(sub.id)}"] .call-name`).forEach((el) => {
+        el.textContent = sub.name;
+      });
+    });
+    if (this.paneSubBtn && this.splitSub === sub.id) this.paneSubBtn.textContent = `サブ: ${shown}`;
+    if (this.splitSubPick) {
+      [...this.splitSubPick.options].forEach((opt) => {
+        if (opt.value === sub.id) opt.textContent = sub.name || sub.id;
+      });
+    }
   }
 
   // ---- 命令の生成 ----
@@ -1201,7 +1226,7 @@ class ProgramEditor {
     listEl.appendChild(svg);
   }
 
-  // 「[記憶] が [文字] と同じ / と違う」を条件の数だけ並べ、2つ以上なら「かつ / または」でつなぐ
+  // 「[記憶] が [記憶か X] と同じ / と違う」。X のときだけ文字欄を出す
   condEditor(inst) {
     const wrap = h('div', 'if-conds');
     inst.conds.forEach((cond, k) => {
@@ -1222,7 +1247,7 @@ class ProgramEditor {
       SLOTS.forEach((s) => {
         const btn = h('button', 'slot-btn' + (cond.slot === s ? ' on' : ''), s);
         btn.type = 'button';
-        btn.title = `${s} に入っている値と比べる`;
+        btn.title = `${s} を調べる`;
         btn.addEventListener('click', () => {
           if (this.locked || cond.slot === s) return;
           cond.slot = s;
@@ -1232,34 +1257,66 @@ class ProgramEditor {
       });
       row.append(slots, h('span', 'if-label', 'が'));
 
-      const input = h('input', 'if-char');
-      input.type = 'text';
-      input.value = cond.ch ?? '';
-      input.placeholder = '文字';
-      input.title = 'ひらがな1文字、または 0〜9。２ と 2 は同じ。空欄は「何も入っていない」';
-      input.disabled = this.locked;
-      input.autocomplete = 'off';
-      let pending = false;
-      const apply = (render) => {
-        const ch = normalizeChar(input.value);
-        const prev = cond.ch ?? null;
-        if (ch !== prev) {
-          cond.ch = ch;
-          pending = true;
-          if (!render) this.save();
-        }
-        if ((ch ?? '') !== input.value) input.value = ch ?? '';
-        if (render && pending) {
-          pending = false;
+      const target = condCompareTo(cond);
+      const fromPad = h('div', 'cond-slots');
+      const pickFrom = (from, on, title) => {
+        const btn = h('button', 'slot-btn' + (on ? ' on' : ''), from === 'x' ? 'X' : from);
+        btn.type = 'button';
+        btn.title = title;
+        btn.addEventListener('click', () => {
+          if (this.locked || on) return;
+          if (from === 'x') {
+            cond.from = 'あ';
+            cond.ch = 'あ';
+          } else {
+            cond.from = from;
+            cond.ch = null;
+          }
           this.changed();
-        }
+        });
+        fromPad.appendChild(btn);
       };
-      if (!this.buildingMirror) this.fieldCommits.push(() => apply(false));
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) input.blur(); });
-      input.addEventListener('input', (e) => { if (!e.isComposing) apply(false); });
-      input.addEventListener('compositionend', () => apply(false));
-      input.addEventListener('change', () => apply(true));
-      row.appendChild(input);
+      SLOTS.forEach((s) => pickFrom(s, target.slot === s, `${s} の中身と比べる`));
+      pickFrom('x', !target.slot, 'X を、入力した文字か空欄と比べる');
+      row.appendChild(fromPad);
+
+      if (!target.slot) {
+        const input = h('input', 'if-char');
+        input.type = 'text';
+        input.value = target.value == null ? '' : String(target.value);
+        input.placeholder = '空';
+        input.title = 'X の文字。ひらがな1文字か、0から9。空欄は「何も入っていない」';
+        input.disabled = this.locked;
+        input.autocomplete = 'off';
+        const commit = (final) => {
+          const raw = String(input.value ?? '').replace(/[\u200b\u200c\u200d\ufeff]/g, '').trim();
+          if (!raw) {
+            input.value = '';
+            if (cond.from !== null || cond.ch != null) {
+              cond.from = null;
+              cond.ch = null;
+              this.save();
+            }
+            return;
+          }
+          const next = normalizeCopyLiteral(raw);
+          if (next == null) {
+            if (final) input.value = cond.from == null ? '' : String(cond.from);
+            return;
+          }
+          input.value = String(next);
+          if (next === cond.from && next === cond.ch) return;
+          cond.from = next;
+          cond.ch = next;
+          this.save();
+        };
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) input.blur(); });
+        input.addEventListener('input', (e) => { if (!e.isComposing) commit(false); });
+        input.addEventListener('compositionend', () => commit(true));
+        input.addEventListener('change', () => commit(true));
+        if (!this.buildingMirror) this.fieldCommits.push(() => commit(true));
+        row.appendChild(input);
+      }
 
       const pad = h('div', 'cmppad');
       [['eq', 'と同じ'], ['ne', 'と違う']].forEach(([cmp, label]) => {
@@ -1535,6 +1592,7 @@ class ProgramEditor {
       li.append(...parts);
     } else if (inst.op === 'CALL') {
       const sub = this.subById(inst.sub);
+      li.dataset.sub = inst.sub;
       li.style.setProperty('--sub-color', sub.color);
       li.appendChild(h('span', 'call-name', sub.name));
       const open = h('button', 'open-btn', '開く');

@@ -531,4 +531,6 @@ const MAIN_STAGES = [
   ]),
 ];
 
-STAGES.push(...MAIN_STAGES);
+// 選択画面に出さない。問題データは残してある。
+const HIDDEN_GROUPS = new Set(['inc&dec', '123…', '↑→↓←', '問題文もみる', 'えぐそう']);
+STAGES.push(...MAIN_STAGES.filter((s) => !HIDDEN_GROUPS.has(s.group)));
